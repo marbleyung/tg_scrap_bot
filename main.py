@@ -6,18 +6,13 @@ from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from config_data.config import Config, load_config
 from handlers.other import register_other_handlers
 from handlers.user import register_user_handlers
-# from handlers.user_reg import register_reg_handlers
-# from handlers.admin import register_admin_handlers
-# from keyboards.main_menu import set_main_menu
 
 logger = logging.getLogger(__name__)
 storage = MemoryStorage()
 
 
 def register_all_handlers(dp: Dispatcher) -> None:
-    # register_reg_handlers(dp)
     register_user_handlers(dp)
-    # register_admin_handlers(dp)
     register_other_handlers(dp)
 
 
@@ -34,7 +29,6 @@ async def main():
     bot: Bot = Bot(token=config.tg_bot.token, parse_mode='HTML')
     dp: Dispatcher = Dispatcher(bot, storage=storage)
 
-    # await set_main_menu(dp)
     register_all_handlers(dp)
 
     try:
