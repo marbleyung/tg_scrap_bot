@@ -31,7 +31,7 @@ async def main():
 
     config: Config = load_config(r'.env')
 
-    bot: Bot = Bot(token=config.tg_bot.token, parse_mode='HTML')
+    bot: Bot = Bot(token=config.tg_bot.token, parse_mode='HTML', proxy='http://proxy.server:3128')
     dp: Dispatcher = Dispatcher(bot, storage=storage)
 
     # await set_main_menu(dp)

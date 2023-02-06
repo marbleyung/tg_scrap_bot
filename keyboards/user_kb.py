@@ -1,4 +1,4 @@
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 start_kb = InlineKeyboardMarkup()
 registrate_button = InlineKeyboardButton(text='START SESSION', callback_data='start_session')
