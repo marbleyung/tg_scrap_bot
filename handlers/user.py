@@ -2,86 +2,75 @@ from dataclasses import dataclass
 from telethon import TelegramClient
 from aiogram import Dispatcher, Bot
 from aiogram.dispatcher.filters.state import StatesGroup, State
-from aiogram.types import Message
+from aiogram.types import Message, InputFile
+
+from config_data.config import Config, load_config
 from lexicon.lexicon import *
 from keyboards.user_kb import *
+from services.create_file import create_file
+from services.database import *
+from services.scrap_channel import *
 
 
 @dataclass
 class User(StatesGroup):
-    phone = State()
-    phone_confirm = State()
-    api_id = State()
-    api_hash = State()
-    confirm_data = State()
-    session = State()
+    userdata = State()
+    userdata_confirm = State()
+    get_code = State()
 
 
-async def process_start(message):
+class Parse(StatesGroup):
+    keyword = State()
+    group_id = State()
+    my_groups = State()
+
+
+async def process_start(message, state):
     await message.answer(text=f'{LEXICON_EN["start"]}',
-                         reply_markup=main_kb)
+                         reply_markup=start_kb)
+    await state.finish()
 
 
-async def process_get_info(callback):
+async def process_get_info(callback, state):
     await callback.message.edit_text(text=f'{LEXICON_EN["info"]}',
-                                     reply_markup=quit_kb)
+                                     reply_markup=back_kb)
+    await state.finish()
 
+
+async def process_info(message, state):
+    await message.answer(text=f'{LEXICON_EN["info"]}',
+                         reply_markup=start_kb)
+    await state.finish()
 
 
 async def process_start_session(callback, state):
-    await callback.message.edit_text(text='Please, share your phone number',
+    await callback.message.edit_text(text=f'{LEXICON_EN["instructions"]}',
                                      reply_markup=quit_kb)
-    await User.phone.set()
+    await User.userdata.set()
 
 
 async def process_phone_number(message, state):
-    await state.update_data(phone=message.text)
-    await message.answer(text=f"Is {message.text} your correct number?\n"
-                              f"If not, there will be an error",
+    data = message.text.split()
+    await state.update_data(phone=data[-1], api_hash=data[1], api_id=data[0])
+    await message.answer(text=f"❗️Is your data correct?\n"
+                              f"Api_id: {data[0]}\n"
+                              f"Api_hash: {data[1]}\n"
+                              f"Phone number: {data[2]}\n",
                          reply_markup=yes_no_kb)
     await User.next()
 
 
 async def process_yes(callback, state):
-    phone = await state.get_data()
-    phone = phone['phone']
-    await callback.message.edit_text(text=f"Phone number: {phone}\n"
-                                          f"Now please go to https://my.telegram.org, login and press 'API development tools'\n"
-                                          f"And in this message sent your App api_id (just copy, paste and send)",
+    await callback.message.edit_text(text=f"❗️Now Telegram will sent you code for login\n"
+                                          f"Please, send it in next format:\n"
+                                          f"code_*****",
                                      reply_markup=quit_kb)
-    await User.api_id.set()
-
-
-async def get_api_id(message, state):
-    await state.update_data(api_id=message.text.strip())
-    await message.answer(text=f"In this message sent your App api_hash (it is on the same page that was App api_id)")
-    await User.next()
-
-
-async def get_api_hash(message, state):
-    await state.update_data(api_hash=message.text.strip())
     data = await state.get_data()
-    await message.answer(text=f"Make sure that your API_ID and API_HASH are correct otherwise it will be error\n"
-                                 f"api_id = {data['api_id']}\n"
-                                 f"api_hash = {data['api_hash']}\n"
-                                 f"Is the data correct?",
-                            reply_markup=confirm_kb)
-    await User.next()
-
-
-async def confirm_data(callback, state):
-    data = await state.get_data()
-    await callback.message.edit_text(text=f"api_id = {data['api_id']}\n"
-                                          f"api_hash = {data['api_hash']}\n"
-                                          f"You will get a code from telegram soon\n"
-                                          f"Please enter it here",
-                                     reply_markup=quit_kb)
     phone = data['phone']
     api_id = data['api_id']
     api_hash = data['api_hash']
-    client = TelegramClient(str(callback.from_user.id), api_id, api_hash)
+    client = TelegramClient(str(callback.from_user.id), api_id=api_id, api_hash=api_hash)
     await client.connect()
-
     phone_code = await client.send_code_request(phone)
     phone_code_hash = phone_code.phone_code_hash
     await state.update_data(phone_code_hash=phone_code_hash)
@@ -89,40 +78,188 @@ async def confirm_data(callback, state):
 
 
 async def get_code(message, state):
-    await state.update_data(code=message.text.strip())
+    await state.update_data(code=message.text.strip().split('_')[-1])
     data = await state.get_data()
-    client = TelegramClient(str(message.from_user.id), data['api_id'], data['api_hash'])
+    client = TelegramClient(str(message.from_user.id),
+                            api_id=data['api_id'],
+                            api_hash=data['api_hash'])
     await client.connect()
     try:
         await client.sign_in(phone=data['phone'],
                              code=data['code'],
                              phone_code_hash=data['phone_code_hash'])
         await message.answer(text='perfect!')
+        create_user(id=message.from_user.id,
+                    api_id=data['api_id'],
+                    api_hash=data['api_hash'],
+                    phone=data['phone'],
+                    phone_hash=data['phone_code_hash'])
+
+        await message.answer(text='registered',
+                             reply_markup=parse_kb)
     except Exception as e:
-        await message.answer(text=e)
-    await state.finish()#
+        await message.answer(text=f"Error: {e}. Check /info")
+    await state.finish()
+
+
+async def process_parse_command(message):
+    try:
+        is_user_registered = str(select_user(message.from_user.id)[0][0])
+        await message.answer(text='🔎Select parsing option',
+                             reply_markup=parse_kb)
+    except:
+        await message.answer(text='❗️You are not registered, start session first\n'
+                                  'Registered and still getting this problem? Check /info',
+                             reply_markup=reg_kb)
+
+
+async def process_parse(callback):
+    try:
+        is_user_registered = str(select_user(callback.from_user.id)[0][0])
+        await callback.message.edit_text(text='🔎Select parsing option',
+                                         reply_markup=parse_kb)
+    except:
+        await callback.message.edit_text(text='❗️You are not registered, start session first\n'
+                                              'Registered and still getting this problem? Check /info',
+                                         reply_markup=reg_kb)
+    await callback.answer()
+
+
+async def get_group_keyword(callback):
+    await callback.message.edit_text(text='Enter keyword to find groups\n'
+                                          'example: python',
+                                     reply_markup=quit_kb)
+    await Parse.keyword.set()
+
+
+async def process_keyword(message, state):
+    result = select_user(message.from_user.id)
+    api_id, api_hash = result[0][2], result[0][1]
+    keyword = message.text.strip()
+    try:
+        status = await find_channel(keyword=keyword, api_hash=api_hash,
+                                    api_id=api_id, username=str(message.from_user.id))
+        create_file(file_path=f'{message.from_user.id}.html',
+                    message=message.from_user.id)
+        await message.answer(text='👏🏻Successfully parsed👏🏻',
+                             reply_markup=parse_kb)
+    except Exception as e:
+        await message.answer(text=f'Error: {e}. Check /info',
+                             reply_markup=parse_kb)
+    await state.finish()
+
+
+async def get_group_id(callback):
+    await callback.message.edit_text(text='Enter group username or link to group AND limit value (1-10)\n'
+                                          'example: https://t.me/ivanoise 5\n'
+                                          'example: ivanoise 2\n'
+                                          '🔝as more limit value is, then more users you will get. Read /info🔝\n',
+                                          # '🤑Buy premium version to increase limit🤑',
+                                     reply_markup=quit_kb)
+    await Parse.group_id.set()
+
+
+async def process_group_id(message, state):
+    await message.answer(text='Parsing...This might take some time')
+    result = select_user(message.from_user.id)
+    api_id, api_hash = result[0][2], result[0][1]
+    link_and_limit = message.text.strip().split()
+    link, limit = link_and_limit[0], link_and_limit[1]
+    limit = int(limit)
+    print(link, limit)
+    if limit > 10 or limit < 1:
+        await message.answer(text='Limit should be in range 1...10')
+    else:
+        try:
+            status = await parse_group_by_id(limit=limit, api_hash=api_hash,
+                                             api_id=api_id,
+                                             username=str(message.from_user.id),
+                                             chat=link)
+            create_file(file_path=f'{message.from_user.id}.html',
+                        message=message.from_user.id)
+            await message.answer(text=f"👏🏻{status}", reply_markup=parse_kb)
+        except Exception as e:
+            await message.answer(text=f'Error: {e}. Check /info',
+                                 reply_markup=parse_kb)
+    await state.finish()
+
+
+async def get_my_groups(callback):
+    result = select_user(callback.from_user.id)
+    api_id, api_hash = result[0][2], result[0][1]
+    await callback.message.answer(text='Creating list of your groups...\n')
+    try:
+        user_groups = await create_groups_list(username=callback.from_user.id,
+                                               api_id=api_id, api_hash=api_hash)
+        await callback.message.edit_text(text=f'{user_groups[0]}\n',
+                                         reply_markup=quit_kb)
+        await Parse.my_groups.set()
+        await callback.message.answer(text=
+                                           f'If you want to parse a CHAT: send just its number\n'
+                                           f'For example, if you got "ChatName" in number 5, just send 5\n'
+                                           f'If you want to parse a CHANNEL: send its number and limit (1-10) like this:\n'
+                                           f'3 9\n'
+                                           f"❗️Don't know what is limit, what is chat and what is channel? Check /info first")
+    except Exception as e:
+        await callback.message.edit_text(text=f'Error: {e}. Please, check /info',
+                                         reply_markup=parse_kb)
+
+
+async def process_my_groups(message, state):
+    await message.answer(text='Parsing...This might take some time')
+    result = select_user(message.from_user.id)
+    api_id, api_hash = result[0][2], result[0][1]
+    data = message.text.strip().split()
+    if len(data) == 1:
+        chat_type = 1
+        limit = 1
+    elif len(data) == 2:
+        chat_type = 0
+        limit = data[1]
+    if int(limit) > 10 or int(limit) < 1:
+        await message.answer(text='Limit should be in range 1...10')
+    else:
+        try:
+            status = await parse_my_groups(chat_type=chat_type, api_hash=api_hash,
+                                           api_id=api_id, username=str(message.from_user.id),
+                                           limit=int(limit), chat_number=int(data[0]))
+            create_file(file_path=f'{message.from_user.id}.html',
+                        message=message.from_user.id)
+            await message.answer(text='👏🏻Successfully parsed👏🏻',
+                                 reply_markup=parse_kb)
+        except Exception as e:
+            await message.answer(text=f'Error: {e}. Check /info',
+                                 reply_markup=parse_kb)
+    await state.finish()
 
 
 async def process_back(callback):
     await callback.message.edit_text(text=LEXICON_EN['start'],
-                                     reply_markup=main_kb)
+                                     reply_markup=start_kb)
 
 
 async def process_quit(callback, state):
     await state.finish()
-    await callback.message.edit_text('Bye')
+    await callback.message.edit_text('🤚🏻Bye')
 
 
 def register_user_handlers(dp):
-    dp.register_message_handler(process_start, commands=['start'])
-    dp.register_callback_query_handler(process_get_info, text=['get_info'])
+    dp.register_message_handler(process_start, commands=['start'], state='*')
+    dp.register_message_handler(process_info, commands=['info'], state='*')
+    dp.register_callback_query_handler(process_get_info, text=['info'], state='*')
     dp.register_callback_query_handler(process_quit, text=['quit'], state='*')
     dp.register_callback_query_handler(process_start_session, text=['start_session', 'no'], state='*')
     dp.register_callback_query_handler(process_back, text=['back'])
-    dp.register_message_handler(process_phone_number, state=User.phone)
-    dp.register_callback_query_handler(process_yes, text=['yes', 'not_confirm'], state=[User.phone_confirm,
-                                                                                        User.confirm_data])
-    dp.register_message_handler(get_api_id, state=User.api_id)
-    dp.register_message_handler(get_api_hash, state=User.api_hash)
-    dp.register_callback_query_handler(confirm_data, state=User.confirm_data, text='confirm')
-    dp.register_message_handler(get_code, state=User.session)
+    dp.register_message_handler(process_phone_number, state=User.userdata)
+    dp.register_callback_query_handler(process_yes, text=['yes', 'not_confirm'], state=[User.userdata_confirm,
+                                                                                        ])
+    dp.register_message_handler(get_code, state=User.get_code)
+    dp.register_callback_query_handler(process_parse, text=['parse'])
+    dp.register_message_handler(process_parse_command, commands=['parse'])
+    dp.register_callback_query_handler(get_my_groups, text='parse_1')
+    dp.register_message_handler(process_my_groups, state=Parse.my_groups)
+    dp.register_callback_query_handler(get_group_id, text='parse_2')
+    dp.register_message_handler(process_group_id, state=Parse.group_id)
+    dp.register_callback_query_handler(get_group_keyword, text='parse_3')
+    dp.register_message_handler(process_keyword, state=Parse.keyword)
+    # dp.register_callback_query_handler(large_parsing, text='parse_4')
