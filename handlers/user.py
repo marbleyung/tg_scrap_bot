@@ -7,7 +7,7 @@ from services.create_file import create_file
 from services.database import *
 from services.scrap_channel import *
 
-
+PROXY = ('proxy.server', 3128, '00000000000000000000000000000000')
 @dataclass
 class User(StatesGroup):
     userdata = State()
@@ -66,7 +66,8 @@ async def process_yes(callback, state):
     phone = data['phone']
     api_id = data['api_id']
     api_hash = data['api_hash']
-    client = TelegramClient(str(callback.from_user.id), api_id=api_id, api_hash=api_hash)
+    client = TelegramClient(str(callback.from_user.id), api_id=api_id,
+                            api_hash=api_hash, proxy=PROXY)
     await client.connect()
     phone_code = await client.send_code_request(phone)
     phone_code_hash = phone_code.phone_code_hash
@@ -79,7 +80,7 @@ async def get_code(message, state):
     data = await state.get_data()
     client = TelegramClient(str(message.from_user.id),
                             api_id=data['api_id'],
-                            api_hash=data['api_hash'])
+                            api_hash=data['api_hash'], proxy=PROXY)
     await client.connect()
     try:
         await client.sign_in(phone=data['phone'],
