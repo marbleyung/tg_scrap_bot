@@ -23,6 +23,7 @@ class Parse(StatesGroup):
     keyword = State()
     group_id = State()
     my_groups = State()
+    large_parse = State()
 
 
 async def process_start(message, state):
@@ -140,7 +141,7 @@ async def process_keyword(message, state):
     api_id, api_hash = result[0][2], result[0][1]
     keyword = message.text.strip()
     try:
-        status = await find_channel(keyword=keyword, api_hash=api_hash,
+        await find_channel(keyword=keyword, api_hash=api_hash,
                                     api_id=api_id, username=str(message.from_user.id))
         create_file(file_path=f'{message.from_user.id}.html',
                     message=message.from_user.id)
@@ -236,6 +237,34 @@ async def process_my_groups(message, state):
     await state.finish()
 
 
+async def get_large_parse_data(callback):
+    await callback.message.edit_text(text='Enter keyword and limit (1-10)\n ❗️USE COMMA AS A SEPARATOR❗️\n'
+                                          'example: python, 10\n'
+                                          'example: python chat, 5',
+                                     reply_markup=quit_kb)
+    await Parse.large_parse.set()
+
+
+async def process_large_parse_data(message, state):
+    await message.answer(text=f"Parsing... It may take few minutes")
+    result = select_user(message.from_user.id)
+    api_id, api_hash = result[0][2], result[0][1]
+    keyword, limit = message.text.strip().split(',')
+    limit = int(limit)
+    try:
+        await large_parse(username=str(message.from_user.id),
+                          limit=limit, api_hash=api_hash,
+                          api_id=api_id, keyword=keyword)
+        create_file(file_path=f'{message.from_user.id}.html',
+                    message=message.from_user.id)
+        await message.answer(text='👏🏻Successfully parsed👏🏻',
+                             reply_markup=parse_kb)
+    except Exception as e:
+        await message.answer(text=f'Error: {e}. Check /help',
+                             reply_markup=parse_kb)
+    await state.finish()
+
+
 async def process_back(callback):
     await callback.message.edit_text(text=LEXICON_EN['start'],
                                      reply_markup=start_kb)
@@ -272,4 +301,5 @@ def register_user_handlers(dp):
     dp.register_message_handler(process_group_id, state=Parse.group_id)
     dp.register_callback_query_handler(get_group_keyword, text='parse_3')
     dp.register_message_handler(process_keyword, state=Parse.keyword)
-    # dp.register_callback_query_handler(large_parsing, text='parse_4')
+    dp.register_callback_query_handler(get_large_parse_data, text='parse_4')
+    dp.register_message_handler(process_large_parse_data, state=Parse.large_parse)

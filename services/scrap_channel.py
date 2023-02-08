@@ -135,10 +135,8 @@ async def find_channel(keyword, api_id, api_hash, username):
 async def parse_group_by_id(limit, chat, api_id, api_hash, username):
     client = TelegramClient(username, api_id=api_id, api_hash=api_hash)
     await client.connect()
-    me = await client.get_me()
     messages = await client.get_messages(chat, limit=limit)
     messages_ids = [i.id for i in messages]
-    name = chat.split('/')[-1]
     with open(fr"{username}.html", 'w', encoding='utf-8') as file:
         userlist = []
         file.write('<table>\n')
@@ -174,59 +172,77 @@ async def parse_group_by_id(limit, chat, api_id, api_hash, username):
         await client.disconnect()
 
 
-async def form_data(keyword, client):
+async def large_parse(limit, api_id, api_hash, username, keyword):
+    client = TelegramClient(username, api_id=api_id, api_hash=api_hash)
+    await client.connect()
     result = await client(SearchRequest(q=keyword, limit=100))
     groups = [i for i in result.chats]
-    data = [i.username for i in groups]
+    chats, channels = [], []
+    for i in groups:
+        if i.megagroup is True or i.gigagroup is True:
+            chats.append(i)
+        else:
+            channels.append(i.username)
     print('Groups have been successfully parsed')
-    await asyncio.sleep(0.5)
     print('Parsing users...')
-    return data
+    print(chats, channels)
+    all_messages = []
+    for channel in channels:
+        messages = await client.get_messages(channel, limit=limit)
+        messages_ids = [i.id for i in messages]
+        all_messages.append(messages_ids)
 
+    with open(fr"{username}.html", 'w', encoding='utf-8') as file:
+        userlist = []
+        file.write('<table>\n')
+        file.write('<tr>\n')
+        file.write('<td>ID\n')
+        file.write('<td>First Name</td>\n')
+        file.write('<td>Last Name</td>\n')
+        file.write('<td>Username</td>\n')
+        file.write('<td>Phone</td>\n')
+        file.write('</tr>\n')
+        print('The process has been started. \n'
+              'Please dont close programm untill the end.\n'
+              'It might take some time (usually not more than few minutes)')
+        for c in channels:
+            for i in all_messages:
+                for j in i:
+                    try:
+                        async for m in client.iter_messages(c, reply_to=j, reverse=True):
+                            if isinstance(m.sender, User):
+                                if m.sender.id not in userlist:
+                                    if m.sender.username is not None:
+                                        userlist.append(m.sender.id)
+                                        file.write('<tr>')
+                                        file.write(f"<td>{str(m.sender.id)}</td>")
+                                        userdata = [m.sender.first_name, m.sender.last_name,
+                                                    m.sender.username, m.sender.phone]
+                                        for data in userdata:
+                                            if data is not None:
+                                                file.write(f"<td>{data}</td>")
+                                            else:
+                                                file.write(f"<td>no data</td>")
+                                        file.write('</tr>\n')
+                    except Exception as e:
+                        pass
 
-# async def large_scrap(limit, func):
-#     me = await client.get_me()
-#     chats = await func
-#     all_messages = []
-#     for chat in chats:
-#         messages = await client.get_messages(chat, limit=limit)
-#         messages_ids = [i.id for i in messages]
-#         all_messages.append(messages_ids)
-#
-#     with open(fr"{me.id}.html", 'w', encoding='utf-8') as file:
-#         userlist = []
-#         file.write('<table>\n')
-#         file.write('<tr>\n')
-#         file.write('<td>ID\n')
-#         file.write('<td>First Name</td>\n')
-#         file.write('<td>Last Name</td>\n')
-#         file.write('<td>Username</td>\n')
-#         file.write('<td>Phone</td>\n')
-#         file.write('</tr>\n')
-#         print('The process has been started. \n'
-#               'Please dont close programm untill the end.\n'
-#               'It might take some time (usually not more than few minutes)')
-#         for c in chats:
-#             for i in all_messages:
-#                 for j in i:
-#                     try:
-#                         async for m in client.iter_messages(c, reply_to=j, reverse=True):
-#                             if isinstance(m.sender, types.User):
-#                                 if m.sender.id not in userlist:
-#                                     if m.sender.username is not None:
-#                                         userlist.append(m.sender.id)
-#                                         file.write('<tr>')
-#                                         file.write(f"<td>{str(m.sender.id)}</td>")
-#                                         userdata = [m.sender.first_name, m.sender.last_name,
-#                                                     m.sender.username, m.sender.phone]
-#                                         for data in userdata:
-#                                             if data is not None:
-#                                                 file.write(f"<td>{data}</td>")
-#                                             else:
-#                                                 file.write(f"<td>no data</td>")
-#                                         file.write('</tr>\n')
-#                     except Exception as e:
-#                         pass
-#
-#         file.write('</table>')
-#         print('Successfully parsed')
+        for c in chats:
+            try:
+                async for i in client.iter_participants(c):
+                    if isinstance(i, User) and i.username is not None:
+                        file.write('<tr>')
+                        file.write(f"<td>{str(i.id)}</td>")
+                        userdata = [i.first_name, i.last_name,
+                                    i.username, i.phone]
+                        for data in userdata:
+                            if data is not None:
+                                file.write(f"<td>{data}</td>")
+                            else:
+                                file.write(f"<td>no data</td>")
+                        file.write('</tr>\n')
+            except Exception as e:
+                print('Exception: ', e)
+        file.write('</table>')
+        print('Successfully parsed')
+    await client.disconnect()
