@@ -37,8 +37,8 @@ async def process_get_info(callback, state):
     await state.finish()
 
 
-async def process_info(message, state):
-    await message.answer(text=f'{LEXICON_EN["info"]}',
+async def process_help(message, state):
+    await message.answer(text=f'{LEXICON_EN["help"]}',
                          reply_markup=start_kb)
     await state.finish()
 
@@ -74,6 +74,7 @@ async def process_yes(callback, state):
     phone_code = await client.send_code_request(phone)
     phone_code_hash = phone_code.phone_code_hash
     await state.update_data(phone_code_hash=phone_code_hash)
+    await client.disconnect()
     await User.next()
 
 
@@ -98,7 +99,9 @@ async def get_code(message, state):
         await message.answer(text='registered',
                              reply_markup=parse_kb)
     except Exception as e:
-        await message.answer(text=f"Error: {e}. Check /info")
+        await message.answer(text=f"Error: {e}. Check /help")
+    finally:
+        await client.disconnect()
     await state.finish()
 
 
@@ -109,7 +112,7 @@ async def process_parse_command(message):
                              reply_markup=parse_kb)
     except:
         await message.answer(text='❗️You are not registered, start session first\n'
-                                  'Registered and still getting this problem? Check /info',
+                                  'Registered and still getting this problem? Check /help',
                              reply_markup=reg_kb)
 
 
@@ -120,7 +123,7 @@ async def process_parse(callback):
                                          reply_markup=parse_kb)
     except:
         await callback.message.edit_text(text='❗️You are not registered, start session first\n'
-                                              'Registered and still getting this problem? Check /info',
+                                              'Registered and still getting this problem? Check /help',
                                          reply_markup=reg_kb)
     await callback.answer()
 
@@ -144,7 +147,7 @@ async def process_keyword(message, state):
         await message.answer(text='👏🏻Successfully parsed👏🏻',
                              reply_markup=parse_kb)
     except Exception as e:
-        await message.answer(text=f'Error: {e}. Check /info',
+        await message.answer(text=f'Error: {e}. Check /help',
                              reply_markup=parse_kb)
     await state.finish()
 
@@ -177,9 +180,9 @@ async def process_group_id(message, state):
                                              chat=link)
             create_file(file_path=f'{message.from_user.id}.html',
                         message=message.from_user.id)
-            await message.answer(text=f"👏🏻{status}", reply_markup=parse_kb)
+            await message.answer(text=f"👏🏻Successfully parsed", reply_markup=parse_kb)
         except Exception as e:
-            await message.answer(text=f'Error: {e}. Check /info',
+            await message.answer(text=f'Error: {e}. Check /help',
                                  reply_markup=parse_kb)
     await state.finish()
 
@@ -201,7 +204,7 @@ async def get_my_groups(callback):
                                            f'3 9\n'
                                            f"❗️Don't know what is limit, what is chat and what is channel? Check /info first")
     except Exception as e:
-        await callback.message.edit_text(text=f'Error: {e}. Please, check /info',
+        await callback.message.edit_text(text=f'Error: {e}. Please, check /help',
                                          reply_markup=parse_kb)
 
 
@@ -228,7 +231,7 @@ async def process_my_groups(message, state):
             await message.answer(text='👏🏻Successfully parsed👏🏻',
                                  reply_markup=parse_kb)
         except Exception as e:
-            await message.answer(text=f'Error: {e}. Check /info',
+            await message.answer(text=f'Error: {e}. Check /help',
                                  reply_markup=parse_kb)
     await state.finish()
 
@@ -243,9 +246,16 @@ async def process_quit(callback, state):
     await callback.message.edit_text('🤚🏻Bye')
 
 
+async def process_delete(message, state):
+    await state.finish()
+    text = delete_user(message.from_user.id)
+    await message.answer(text=f"Status: {text}")
+
+
 def register_user_handlers(dp):
     dp.register_message_handler(process_start, commands=['start'], state='*')
-    dp.register_message_handler(process_info, commands=['info'], state='*')
+    dp.register_message_handler(process_help, commands=['help'], state='*')
+    dp.register_message_handler(process_delete, commands=['del', 'delete'], state='*')
     dp.register_callback_query_handler(process_get_info, text=['info'], state='*')
     dp.register_callback_query_handler(process_quit, text=['quit'], state='*')
     dp.register_callback_query_handler(process_start_session, text=['start_session', 'no'], state='*')
