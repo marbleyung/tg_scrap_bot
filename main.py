@@ -8,7 +8,7 @@ from handlers.other import register_other_handlers
 from handlers.user import register_user_handlers
 # from handlers.user_reg import register_reg_handlers
 # from handlers.admin import register_admin_handlers
-# from keyboards.main_menu import set_main_menu
+from keyboards.main_menu import set_main_menu
 
 logger = logging.getLogger(__name__)
 storage = MemoryStorage()
@@ -34,7 +34,7 @@ async def main():
     bot: Bot = Bot(token=config.tg_bot.token, parse_mode='HTML')#, proxy='http://proxy.server:3128')
     dp: Dispatcher = Dispatcher(bot, storage=storage)
 
-    # await set_main_menu(dp)
+    await set_main_menu(dp)
     register_all_handlers(dp)
 
     try:
