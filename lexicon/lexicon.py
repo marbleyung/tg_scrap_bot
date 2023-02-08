@@ -21,5 +21,9 @@ LEXICON_EN = {'start': '🔍This bot can collect telegram users data just in few
                       'Error: The key is not registered in the system (caused by SearchRequest).\n'
                       'Fix: This is authentication error. Use /del and then create new session (/start).\n'
                       'You might also terminate current session in telegram.\n'
-                      '❓YOUR PROBLEM IS NOT IN LIST: raskolbrd@gmail.com'
+                      '❓YOUR PROBLEM IS NOT IN LIST: raskolbrd@gmail.com',
+              'parsing_options': '1. PARSE MY GROUPS - bot creates list of your groups, you have to send the number of group to parse\n'
+                                 '2. PARSE GROUP BY LINK/USERNAME - you have to send channel username or link to parse it\n'
+                                 '3. FIND GROUPS - find groups by keyword\n'
+                                 '4. LARGE PARSING - first it find groups by keyword and then parse each group automatically, instead of parse each group by link\n'
               }

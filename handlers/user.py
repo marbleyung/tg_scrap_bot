@@ -1,10 +1,6 @@
 from dataclasses import dataclass
-from telethon import TelegramClient
-from aiogram import Dispatcher, Bot
 from aiogram.dispatcher.filters.state import StatesGroup, State
-from aiogram.types import Message, InputFile
 
-from config_data.config import Config, load_config
 from lexicon.lexicon import *
 from keyboards.user_kb import *
 from services.create_file import create_file
@@ -109,7 +105,8 @@ async def get_code(message, state):
 async def process_parse_command(message):
     try:
         is_user_registered = str(select_user(message.from_user.id)[0][0])
-        await message.answer(text='🔎Select parsing option',
+        await message.answer(text=f'{LEXICON_EN["parsing_options"]}\n'
+                                  f'🔎Select parsing option',
                              reply_markup=parse_kb)
     except:
         await message.answer(text='❗️You are not registered, start session first\n'
@@ -120,8 +117,9 @@ async def process_parse_command(message):
 async def process_parse(callback):
     try:
         is_user_registered = str(select_user(callback.from_user.id)[0][0])
-        await callback.message.edit_text(text='🔎Select parsing option',
-                                         reply_markup=parse_kb)
+        await callback.message.edit_text(text=f'{LEXICON_EN["parsing_options"]}\n'
+                                              f'f🔎Select parsing option',
+                             reply_markup=parse_kb)
     except:
         await callback.message.edit_text(text='❗️You are not registered, start session first\n'
                                               'Registered and still getting this problem? Check /help',
@@ -238,8 +236,8 @@ async def process_my_groups(message, state):
 
 
 async def get_large_parse_data(callback):
-    await callback.message.edit_text(text='Enter keyword and limit (1-10)\n ❗️USE COMMA AS A SEPARATOR❗️\n'
-                                          'example: python, 10\n'
+    await callback.message.edit_text(text='Enter keyword and limit (1-5)\n ❗️USE COMMA AS A SEPARATOR❗️\n'
+                                          'example: python, 2\n'
                                           'example: python chat, 5',
                                      reply_markup=quit_kb)
     await Parse.large_parse.set()
@@ -251,17 +249,20 @@ async def process_large_parse_data(message, state):
     api_id, api_hash = result[0][2], result[0][1]
     keyword, limit = message.text.strip().split(',')
     limit = int(limit)
-    try:
-        await large_parse(username=str(message.from_user.id),
-                          limit=limit, api_hash=api_hash,
-                          api_id=api_id, keyword=keyword)
-        create_file(file_path=f'{message.from_user.id}.html',
-                    message=message.from_user.id)
-        await message.answer(text='👏🏻Successfully parsed👏🏻',
-                             reply_markup=parse_kb)
-    except Exception as e:
-        await message.answer(text=f'Error: {e}. Check /help',
-                             reply_markup=parse_kb)
+    if limit < 1 or limit > 5:
+        await message.answer(text="For this option limit should be in range 1...5")
+    else:
+        try:
+            await large_parse(username=str(message.from_user.id),
+                              limit=limit, api_hash=api_hash,
+                              api_id=api_id, keyword=keyword)
+            create_file(file_path=f'{message.from_user.id}.html',
+                        message=message.from_user.id)
+            await message.answer(text='👏🏻Successfully parsed👏🏻',
+                                 reply_markup=parse_kb)
+        except Exception as e:
+            await message.answer(text=f'Error: {e}. Check /help',
+                                 reply_markup=parse_kb)
     await state.finish()
 
 
