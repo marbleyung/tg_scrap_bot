@@ -71,7 +71,6 @@ async def process_yes(callback, state):
     phone_code = await client.send_code_request(phone)
     phone_code_hash = phone_code.phone_code_hash
     await state.update_data(phone_code_hash=phone_code_hash)
-    await client.disconnect()
     await User.next()
 
 
@@ -97,8 +96,7 @@ async def get_code(message, state):
                              reply_markup=parse_kb)
     except Exception as e:
         await message.answer(text=f"Error: {e}. Check /help")
-    finally:
-        await client.disconnect()
+    await client.disconnect()
     await state.finish()
 
 
