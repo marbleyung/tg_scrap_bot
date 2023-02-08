@@ -7,7 +7,7 @@ from services.create_file import create_file
 from services.database import *
 from services.scrap_channel import *
 
-PROXY = ('proxy.server', 3128, '00000000000000000000000000000000')
+PROXY = ('http://proxy.server', 3128, '00000000000000000000000000000000')
 @dataclass
 class User(StatesGroup):
     userdata = State()
